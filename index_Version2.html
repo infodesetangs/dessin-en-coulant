@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dessin en Coulant Évolué</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* Empêche les barres de défilement */
+            background-color: #1a1a2e; /* Fond sombre */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+            color: #e0e0e0;
+            user-select: none; /* Empêche la sélection de texte */
+            -webkit-user-select: none; /* Pour Safari */
+            -moz-user-select: none; /* Pour Firefox */
+            -ms-user-select: none; /* Pour Edge/IE */
+        }
+
+        h1 {
+            color: #bbccff;
+            text-shadow: 0 0 10px rgba(187, 204, 255, 0.5);
+            margin-bottom: 15px;
+        }
+
+        canvas {
+            border: 2px solid #5d5d81;
+            background-color: #2b2b4d; /* Fond du canvas plus clair que le body */
+            display: block; /* Supprime l'espace sous le canvas */
+            cursor: crosshair; /* Curseur en croix pour dessiner */
+            box-shadow: 0 0 25px rgba(93, 93, 129, 0.6);
+            border-radius: 10px;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap; /* Permet aux éléments de s'enrouler sur des petits écrans */
+            gap: 10px; /* Espacement entre les boutons/contrôles */
+            align-items: center;
+            justify-content: center; /* Centre les contrôles */
+        }
+
+        button {
+            padding: 8px 15px; /* Padding légèrement réduit */
+            background-color: #4a4a86;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em; /* Taille de police légèrement plus petite */
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            white-space: nowrap; /* Empêche le texte de s'enrouler dans les boutons */
+        }
+
+        button:hover {
+            background-color: #5d5d81;
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* Style pour le bouton actif (sélectionné) */
+        button.active {
+            background-color: #bbccff;
+            color: #1a1a2e;
+            font-weight: bold;
+            box-shadow: 0 0 10px rgba(187, 204, 255, 0.7);
+        }
+
+        input[type="range"] {
+            width: 120px; /* Curseur légèrement plus petit */
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            background: #5d5d81;
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #bbccff;
+            border-radius: 50%;
+            cursor: grab;
+            box-shadow: 0 0 5px rgba(187, 204, 255, 0.7);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #bbccff;
+            border-radius: 50%;
+            cursor: grab;
+            box-shadow: 0 0 5px rgba(187, 204, 255, 0.7);
+        }
+
+        label {
+            color: #e0e0e0;
+            font-size: 0.8em; /* Taille de police du label légèrement plus petite */
+        }
+
+        /* Message pour le mode automatique */
+        #autoModeMessage {
+            margin-top: 10px;
+            color: #bbccff;
+            font-size: 1.1em;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dessin en Coulant (Gravity Paint)</h1>
+    <canvas id="paintCanvas"></canvas>
+
+    <div class="controls">
+        <label for="brushSize">Taille du pinceau: <span id="brushSizeValue">5</span></label>
+        <input type="range" id="brushSize" min="1" max="20" value="5">
+        <button id="clearButton">Effacer</button>
+        <button id="autoModeToggle">Mode Auto 🌈</button>
+    </div>
+
+    <div class="controls">
+        <button id="windLeftButton" class="wind-btn">Vent 🌬️ Gauche</button>
+        <button id="noWindButton" class="wind-btn active">Pas de Vent</button>
+        <button id="windRightButton" class="wind-btn">Vent 🌬️ Droite</button>
+    </div>
+
+    <div class="controls">
+        <button id="normalModeButton" class="mode-btn active">Mode Normal ✨</button>
+        <button id="fireModeButton" class="mode-btn">Mode Feu 🔥</button>
+        <button id="waterModeButton" class="mode-btn">Mode Eau 💧</button>
+    </div>
+
+    <div id="autoModeMessage"></div>
+
+    <script>
+        // Références aux éléments HTML
+        const canvas = document.getElementById('paintCanvas');
+        const ctx = canvas.getContext('2d');
+        const clearButton = document.getElementById('clearButton');
+        const brushSizeSlider = document.getElementById('brushSize');
+        const brushSizeValueSpan = document.getElementById('brushSizeValue');
+        const autoModeToggle = document.getElementById('autoModeToggle');
+        const autoModeMessage = document.getElementById('autoModeMessage');
+
+        // Boutons de vent
+        const windLeftButton = document.getElementById('windLeftButton');
+        const noWindButton = document.getElementById('noWindButton');
+        const windRightButton = document.getElementById('windRightButton');
+
+        // Boutons de mode
+        const normalModeButton = document.getElementById('normalModeButton');
+        const fireModeButton = document.getElementById('fireModeButton');
+        const waterModeButton = document.getElementById('waterModeButton');
+
+        // Dimensions du canvas (fixes pour l'exemple)
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 600;
+        canvas.width = CANVAS_WIDTH;
+        canvas.height = CANVAS_HEIGHT;
+
+        // Taille de chaque "particule" ou "cellule" de couleur
+        const PARTICLE_SIZE = 4;
+
+        // Grille de couleurs: stocke la couleur de chaque particule (hue HSL)
+        let colorGrid = [];
+        let cols, rows;
+
+        // État du dessin et de la simulation
+        let isDrawing = false;
+        let currentHue = 0; // Pour le mode arc-en-ciel
+
+        let brushSize = parseInt(brushSizeSlider.value);
+        let gravityBaseSpeed = 1; // Nombre de "pas" de gravité par frame d'animation
+
+        // --- Nouveaux états de fonctionnalités ---
+        let isAutoMode = false;
+        let windDirection = 0; // -1: gauche, 0: aucun, 1: droite
+        let currentMode = 'normal'; // 'normal', 'fire', 'water'
+
+        // --- Initialisation et Réinitialisation de la grille ---
+        function initGrid() {
+            cols = Math.floor(CANVAS_WIDTH / PARTICLE_SIZE);
+            rows = Math.floor(CANVAS_HEIGHT / PARTICLE_SIZE);
+
+            colorGrid = new Array(cols);
+            for (let i = 0; i < cols; i++) {
+                colorGrid[i] = new Array(rows).fill(null); // Initialise toutes les cellules à vide
+            }
+            autoModeMessage.textContent = ''; // Efface le message si on efface la grille
+        }
+        initGrid(); // Appelle l'initialisation au démarrage
+
+        // --- Fonctions de dessin ---
+        function drawParticle(x, y, hue) {
+            // S'assure que les coordonnées sont valides
+            if (x >= 0 && x < cols && y >= 0 && y < rows) {
+                // Pour le mode "Eau", si une particule d'eau est dessinée sur une existante, on la "bleuise"
+                if (currentMode === 'water' && colorGrid[x][y] !== null) {
+                    colorGrid[x][y] = 200; // Une teinte de bleu fixe pour simuler le mélange/l'absorption
+                } else {
+                    colorGrid[x][y] = hue;
+                }
+            }
+        }
+
+        // Détermine la couleur du pinceau selon le mode actif
+        function getDrawingHue() {
+            if (currentMode === 'fire') {
+                return 0 + Math.floor(Math.random() * 60); // Teintes du rouge au jaune
+            } else if (currentMode === 'water') {
+                return 180 + Math.floor(Math.random() * 60); // Teintes du cyan au bleu
+            } else { // Mode Normal (arc-en-ciel)
+                return currentHue;
+            }
+        }
+
+        function drawBrush(e) {
+            if (!isDrawing || isAutoMode) return; // Ne dessine pas si le mode auto est activé
+
+            const rect = canvas.getBoundingClientRect();
+            let mouseX, mouseY;
+
+            // Gère les événements souris et tactiles
+            if (e.touches && e.touches.length > 0) {
+                mouseX = e.touches[0].clientX - rect.left;
+                mouseY = e.touches[0].clientY - rect.top;
+            } else {
+                mouseX = e.clientX - rect.left;
+                mouseY = e.clientY - rect.top;
+            }
+
+            // Convertit les coordonnées en coordonnées de grille
+            const gridX = Math.floor(mouseX / PARTICLE_SIZE);
+            const gridY = Math.floor(mouseY / PARTICLE_SIZE);
+
+            const hueToDraw = getDrawingHue();
+
+            // Dessine un cercle de particules autour de la position du curseur
+            for (let i = -brushSize; i <= brushSize; i++) {
+                for (let j = -brushSize; j <= brushSize; j++) {
+                    const distance = Math.sqrt(i * i + j * j);
+                    if (distance <= brushSize) {
+                        drawParticle(gridX + i, gridY + j, hueToDraw);
+                    }
+                }
+            }
+
+            // Fait avancer la couleur arc-en-ciel si on est en mode normal
+            if (currentMode === 'normal') {
+                currentHue = (currentHue + 1) % 360;
+            }
+        }
+
+        // --- Logique de mouvement des particules (Gravité, Vent, Feu/Eau) ---
+        function applyMovement() {
+            let startJ, endJ, stepJ;
+            let mainDirectionY; // +1 pour le bas, -1 pour le haut
+
+            // Détermine la direction d'itération et de mouvement selon le mode
+            if (currentMode === 'fire') {
+                startJ = 0; // Itère du bas vers le haut
+                endJ = rows;
+                stepJ = 1;
+                mainDirectionY = -1; // Le feu monte
+            } else { // 'normal' ou 'water'
+                startJ = rows - 1; // Itère du haut vers le bas
+                endJ = -1;
+                stepJ = -1;
+                mainDirectionY = 1; // L'eau/normal descend
+            }
+
+            for (let j = startJ; j !== endJ; j += stepJ) {
+                // Randomise l'ordre des colonnes pour éviter un biais visuel (ex: toujours tomber à gauche)
+                let iOrder = Array.from({ length: cols }, (_, k) => k);
+                if (Math.random() < 0.5) iOrder.reverse();
+
+                for (let i of iOrder) {
+                    const currentColor = colorGrid[i][j];
+
+                    if (currentColor !== null) { // Si la cellule contient une couleur
+                        let moved = false;
+                        let nextI, nextJ;
+
+                        // 1. Essaye de bouger dans la direction principale (bas ou haut)
+                        nextI = i;
+                        nextJ = j + mainDirectionY;
+                        if (nextJ >= 0 && nextJ < rows && colorGrid[nextI][nextJ] === null) {
+                            colorGrid[nextI][nextJ] = currentColor;
+                            colorGrid[i][j] = null; // Vide la cellule d'origine
+                            moved = true;
+                        }
+
+                        // 2. Essaye un mouvement diagonal si le chemin principal est bloqué
+                        if (!moved) {
+                            let diagonalOptions = [];
+                            // Priorise la direction du vent si active
+                            if (windDirection === -1) diagonalOptions = [-1, 1]; // Essaye gauche, puis droite
+                            else if (windDirection === 1) diagonalOptions = [1, -1]; // Essaye droite, puis gauche
+                            else diagonalOptions = Math.random() < 0.5 ? [-1, 1] : [1, -1]; // Aléatoire si pas de vent
+
+                            for (let dirX of diagonalOptions) {
+                                nextI = i + dirX;
+                                nextJ = j + mainDirectionY; // Toujours un mouvement vertical diagonal
+
+                                if (nextI >= 0 && nextI < cols && nextJ >= 0 && nextJ < rows && colorGrid[nextI][nextJ] === null) {
+                                    colorGrid[nextI][nextJ] = currentColor;
+                                    colorGrid[i][j] = null;
+                                    moved = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        // 3. Pour le mode 'feu', permet une propagation horizontale si bloqué verticalement
+                        if (currentMode === 'fire' && !moved) {
+                            let horizontalOptions = Math.random() < 0.5 ? [-1, 1] : [1, -1]; // Aléatoire horizontal
+                            for (let dirX of horizontalOptions) {
+                                nextI = i + dirX;
+                                nextJ = j; // Reste sur la même ligne, mouvement purement horizontal
+                                if (nextI >= 0 && nextI < cols && colorGrid[nextI][nextJ] === null) {
+                                    colorGrid[nextI][nextJ] = currentColor;
+                                    colorGrid[i][j] = null;
+                                    moved = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- Injection de particules en Mode Auto ---
+            if (isAutoMode) {
+                // Ajuste la densité des particules en fonction du mode (plus pour l'eau)
+                const spawnDensity = currentMode === 'water' ? 2 : 1;
+                const numParticlesToSpawn = Math.floor(cols / 20) * spawnDensity;
+
+                for (let k = 0; k < numParticlesToSpawn; k++) {
+                    const spawnX = Math.floor(Math.random() * cols);
+                    const spawnY = 0; // Apparaît en haut du canvas
+                    if (colorGrid[spawnX][spawnY] === null) {
+                        // Utilise une teinte arc-en-ciel qui tourne rapidement pour le mode auto
+                        colorGrid[spawnX][spawnY] = currentHue;
+                        currentHue = (currentHue + 5) % 360; // Changement de couleur plus rapide
+                    }
+                }
+            }
+        }
+
+        // --- Rendu sur le canvas ---
+        function renderGrid() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); // Efface tout le canvas
+
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    const hue = colorGrid[i][j];
+                    if (hue !== null) {
+                        // Utilise HSL (Teinte, Saturation, Luminosité)
+                        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`; // Pleine saturation, luminosité moyenne
+                        ctx.fillRect(i * PARTICLE_SIZE, j * PARTICLE_SIZE, PARTICLE_SIZE, PARTICLE_SIZE);
+                    }
+                }
+            }
+        }
+
+        // --- Boucle d'animation principale ---
+        let lastGravityUpdate = 0;
+        let gravityInterval = 1000 / 30; // 30 mises à jour de gravité par seconde par défaut
+
+        function animate(currentTime) {
+            // Ajuste la vitesse de la gravité/mouvement selon le mode
+            let currentGravitySpeed = gravityBaseSpeed;
+            if (currentMode === 'water') {
+                currentGravitySpeed = 3; // L'eau coule plus vite
+            } else if (currentMode === 'fire') {
+                currentGravitySpeed = 1; // Le feu monte à une vitesse normale
+            } else {
+                currentGravitySpeed = 1; // Mode normal
+            }
+
+            // Applique le mouvement des particules plusieurs fois par frame pour simuler la vitesse
+            if (currentTime - lastGravityUpdate > gravityInterval) {
+                for (let i = 0; i < currentGravitySpeed; i++) {
+                    applyMovement();
+                }
+                lastGravityUpdate = currentTime;
+            }
+
+            renderGrid(); // Dessine la grille à chaque frame
+
+            requestAnimationFrame(animate); // Demande la prochaine frame
+        }
+
+        // --- Écouteurs d'événements ---
+        canvas.addEventListener('mousedown', (e) => {
+            if (isAutoMode) return; // Désactive le dessin manuel en mode auto
+            isDrawing = true;
+            drawBrush(e); // Dessine la première particule dès le clic
+        });
+        canvas.addEventListener('mousemove', drawBrush);
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+        canvas.addEventListener('mouseleave', () => { // Arrête de dessiner si la souris quitte le canvas
+            isDrawing = false;
+        });
+
+        // Pour les appareils tactiles
+        canvas.addEventListener('touchstart', (e) => {
+            if (isAutoMode) return; // Désactive le dessin manuel en mode auto
+            e.preventDefault(); // Empêche le défilement de la page
+            isDrawing = true;
+            drawBrush(e.touches[0]);
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (isAutoMode) return; // Désactive le dessin manuel en mode auto
+            e.preventDefault(); // Empêche le défilement de la page
+            drawBrush(e.touches[0]);
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', () => {
+            isDrawing = false;
+        });
+        canvas.addEventListener('touchcancel', () => {
+            isDrawing = false;
+        });
+
+        // Bouton Effacer
+        clearButton.addEventListener('click', initGrid);
+
+        // Curseur de taille du pinceau
+        brushSizeSlider.addEventListener('input', () => {
+            brushSize = parseInt(brushSizeSlider.value);
+            brushSizeValueSpan.textContent = brushSize;
+        });
+
+        // --- Nouveaux Écouteurs d'Événements pour les fonctionnalités ---
+
+        // Toggle Mode Auto
+        autoModeToggle.addEventListener('click', () => {
+            isAutoMode = !isAutoMode;
+            autoModeToggle.classList.toggle('active', isAutoMode);
+            initGrid(); // Efface la grille pour un nouveau départ en mode auto
+            if (isAutoMode) {
+                autoModeMessage.textContent = "Mode Automatique Activé. Regardez la magie opérer !";
+            } else {
+                autoModeMessage.textContent = "";
+            }
+        });
+
+        // Contrôles du Vent
+        function setWindDirection(direction) {
+            windDirection = direction;
+            // Met à jour les classes 'active' sur les boutons de vent
+            document.querySelectorAll('.wind-btn').forEach(btn => btn.classList.remove('active'));
+            if (direction === -1) windLeftButton.classList.add('active');
+            else if (direction === 1) windRightButton.classList.add('active');
+            else noWindButton.classList.add('active');
+        }
+        windLeftButton.addEventListener('click', () => setWindDirection(-1));
+        noWindButton.addEventListener('click', () => setWindDirection(0));
+        windRightButton.addEventListener('click', () => setWindDirection(1));
+
+        // Contrôles de Mode (Normal, Feu, Eau)
+        function setCurrentMode(mode) {
+            currentMode = mode;
+            // Met à jour les classes 'active' sur les boutons de mode
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            if (mode === 'normal') normalModeButton.classList.add('active');
+            else if (mode === 'fire') fireModeButton.classList.add('active');
+            else if (mode === 'water') waterModeButton.classList.add('active');
+            initGrid(); // Efface la grille quand on change de mode pour un nouveau départ
+        }
+        normalModeButton.addEventListener('click', () => setCurrentMode('normal'));
+        fireModeButton.addEventListener('click', () => setCurrentMode('fire'));
+        waterModeButton.addEventListener('click', () => setCurrentMode('water'));
+
+        // Démarre l'animation
+        animate(0);
+
+    </script>
+</body>
+</html>
